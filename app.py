@@ -3,7 +3,7 @@ import streamlit as st
 from database import run_query
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3"
+MODEL = "phi3:mini"   # use your installed small model
 
 st.set_page_config(
     page_title="Mental Health Australia AI Assistant",
@@ -12,119 +12,113 @@ st.set_page_config(
 )
 
 st.title("🧠 Mental Health Australia AI Assistant")
-st.write("Ask any question about Australian SA2 mental health prevalence.")
-
-SCHEMA = """
-Table: mental_health_analysis
-
-Columns:
-- sa2_code
-- sa2_name
-- persons_with_disorder
-- overall_pct
-- mild_pct
-- moderate_pct
-- severe_pct
-- population
-
-Business definitions:
-- affected population means persons_with_disorder
-- overall prevalence means overall_pct
-- severe prevalence means severe_pct
-- mild prevalence means mild_pct
-- moderate prevalence means moderate_pct
-- region means sa2_name
-"""
+st.write("Ask questions about Australian SA2 mental health prevalence.")
 
 def ask_ollama(prompt):
     response = requests.post(
         OLLAMA_URL,
-        json={
-            "model": MODEL,
-            "prompt": prompt,
-            "stream": False
-        },
+        json={"model": MODEL, "prompt": prompt, "stream": False},
         timeout=120
     )
     response.raise_for_status()
     return response.json()["response"].strip()
 
+def create_query(question):
+    q = question.lower().replace("prevalance", "prevalence")
 
-def generate_sql(user_question):
+    if "high risk" in q:
+        return """
+        SELECT sa2_name, overall_pct, severe_pct, population
+        FROM mental_health_analysis
+        WHERE severe_pct > 5
+        ORDER BY severe_pct DESC
+        LIMIT 20;
+        """
+
+    if "lowest" in q and "overall" in q:
+        return """
+        SELECT sa2_name, overall_pct, severe_pct, population
+        FROM mental_health_analysis
+        ORDER BY overall_pct ASC
+        LIMIT 20;
+        """
+
+    if "highest" in q and "overall" in q:
+        return """
+        SELECT sa2_name, overall_pct, severe_pct, population
+        FROM mental_health_analysis
+        ORDER BY overall_pct DESC
+        LIMIT 20;
+        """
+
+    if "lowest" in q and "severe" in q:
+        return """
+        SELECT sa2_name, severe_pct, overall_pct, population
+        FROM mental_health_analysis
+        ORDER BY severe_pct ASC
+        LIMIT 20;
+        """
+
+    if "highest" in q and "severe" in q:
+        return """
+        SELECT sa2_name, severe_pct, overall_pct, population
+        FROM mental_health_analysis
+        ORDER BY severe_pct DESC
+        LIMIT 20;
+        """
+
+    if "lowest" in q and ("affected" in q or "disorder" in q):
+        return """
+        SELECT sa2_name, persons_with_disorder, overall_pct, population
+        FROM mental_health_analysis
+        ORDER BY persons_with_disorder ASC
+        LIMIT 20;
+        """
+
+    if "largest" in q and ("affected" in q or "disorder" in q):
+        return """
+        SELECT sa2_name, persons_with_disorder, overall_pct, population
+        FROM mental_health_analysis
+        ORDER BY persons_with_disorder DESC
+        LIMIT 20;
+        """
+
+    if "average" in q:
+        return """
+        SELECT 
+            ROUND(AVG(overall_pct), 2) AS avg_overall_pct,
+            ROUND(AVG(mild_pct), 2) AS avg_mild_pct,
+            ROUND(AVG(moderate_pct), 2) AS avg_moderate_pct,
+            ROUND(AVG(severe_pct), 2) AS avg_severe_pct
+        FROM mental_health_analysis;
+        """
+
+    if "population" in q:
+        return """
+        SELECT sa2_name, population, persons_with_disorder, overall_pct
+        FROM mental_health_analysis
+        ORDER BY population DESC
+        LIMIT 20;
+        """
+
+    return None
+
+def generate_summary(question, df):
     prompt = f"""
-You are a PostgreSQL SQL assistant.
-
-Use only this table and columns:
-
-{SCHEMA}
-
-Rules:
-- Generate only one SELECT query.
-- Do not use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE.
-- Always use the table mental_health_analysis.
-- Always limit results to 20 rows unless the user asks for averages, totals, or counts.
-- If the user asks for lowest or smallest values, sort ASC.
-- If the user asks for highest or largest values, sort DESC.
-- If the user says affected population, use persons_with_disorder.
-- Return SQL only. No explanation. No markdown.
-
-User question:
-{user_question}
-"""
-
-    sql = ask_ollama(prompt)
-
-    sql = (
-        sql.replace("```sql", "")
-        .replace("```", "")
-        .strip()
-    )
-
-    return sql
-
-
-def is_safe_sql(sql):
-    blocked_words = [
-        "insert",
-        "update",
-        "delete",
-        "drop",
-        "alter",
-        "create",
-        "truncate"
-    ]
-
-    sql_lower = sql.lower().strip()
-
-    if not sql_lower.startswith("select"):
-        return False
-
-    for word in blocked_words:
-        if word in sql_lower:
-            return False
-
-    return True
-
-
-def generate_summary(user_question, df):
-    summary_prompt = f"""
 You are a healthcare data analyst.
 
 User question:
-{user_question}
+{question}
 
-Query result:
+Data result:
 {df.head(10).to_string(index=False)}
 
-Write a short business-style explanation in 3-4 lines.
+Write a short 3-line explanation.
 Do not mention SQL.
 Do not mention database.
-Do not use technical language.
-Focus on the insight and what it means.
+Keep it simple.
 """
-
-    return ask_ollama(summary_prompt)
-
+    return ask_ollama(prompt)
 
 examples = [
     "Which regions have the highest severe prevalence?",
@@ -132,30 +126,29 @@ examples = [
     "Which regions have the lowest affected population?",
     "Which regions have the largest affected population?",
     "What is the average mental health prevalence?",
-    "Show regions where severe prevalence is above 6%",
     "Which regions are high risk?"
 ]
 
 st.caption("Example questions:")
-for example in examples:
-    st.write(f"• {example}")
+for ex in examples:
+    st.write(f"• {ex}")
 
 question = st.text_input("Ask your question:")
 
 if question:
     with st.spinner("Analysing your question..."):
-        try:
-            sql_query = generate_sql(question)
+        query = create_query(question)
 
-            if not is_safe_sql(sql_query):
-                st.error("The assistant generated an unsafe or invalid query. Please rephrase your question.")
-            else:
-                df = run_query(sql_query)
+        if query is None:
+            st.warning("Please ask about severe prevalence, overall prevalence, affected population, average prevalence, high-risk regions, or population.")
+        else:
+            try:
+                df = run_query(query)
 
                 st.subheader("AI Summary")
 
                 if df.empty:
-                    st.warning("No matching results were found for this question.")
+                    st.warning("No matching results found.")
                 else:
                     summary = generate_summary(question, df)
                     st.write(summary)
@@ -165,6 +158,6 @@ if question:
 
                     st.success("Answer generated using local GenAI and PostgreSQL.")
 
-        except Exception as e:
-            st.error("Something went wrong while generating the answer.")
-            st.write(e)
+            except Exception as e:
+                st.error("Something went wrong while retrieving the answer.")
+                st.write(e)
