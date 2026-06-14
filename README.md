@@ -1,6 +1,6 @@
 # Mental Health Treatment Gap Analysis Australia
 
-An interactive analytics solution built using PostgreSQL, Power BI, Python, and Streamlit to analyse mental health prevalence across Australian SA2 regions and provide AI-powered data exploration.
+Built an AI-powered Mental Health Analytics Platform using PostgreSQL, SQL, Power BI, Python, Streamlit, and local LLMs (Ollama) to enable natural-language exploration of Australian mental health data.
 
 ## Dashboard Preview
 
