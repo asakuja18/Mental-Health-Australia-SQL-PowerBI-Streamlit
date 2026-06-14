@@ -9,13 +9,18 @@ An interactive Power BI dashboard providing regional mental health analysis, sev
 
 ## AI Assistant Preview
 
-<img width="1077" height="765" alt="Screenshot 2026-06-14 at 3 55 15 PM" src="https://github.com/user-attachments/assets/e117f54a-d8b6-490a-b7cd-4435ed546acb" />
+<img width="1440" height="900" alt="Screenshot 2026-06-14 at 7 57 19 PM" src="https://github.com/user-attachments/assets/ab620400-50bf-4039-8f6b-23334467d220" />
+
 AI Assistant home screen with predefined and custom question options.
 
 ## AI Query Example
 
-<img width="1081" height="763" alt="Screenshot 2026-06-14 at 3 55 44 PM" src="https://github.com/user-attachments/assets/03456aa8-de54-4a17-9fc9-1612fe185da9" />
-AI-generated query response displaying severe prevalence analysis across Australian SA2 regions
+
+<img width="1440" height="900" alt="Screenshot 2026-06-14 at 7 56 32 PM" src="https://github.com/user-attachments/assets/4d4d4849-49d3-4299-8442-d8b6df3a2520" />
+
+<img width="1440" height="900" alt="Screenshot 2026-06-14 at 7 57 54 PM" src="https://github.com/user-attachments/assets/7777b4b7-b49d-45bd-aed8-e6fbf1c7439e" />
+
+
 
 ---
 ## Tech Stack
