@@ -56,18 +56,6 @@ The project demonstrates how data analytics and conversational AI can be combine
 
 ---
 
-## Technology Stack
-
-* PostgreSQL
-* SQL
-* Power BI
-* Python
-* Streamlit
-* Pandas
-* Psycopg2
-
----
-
 ## Project Outcome
 
 This project delivers an end-to-end analytics solution that combines data engineering, SQL analysis, business intelligence reporting, and AI-assisted data exploration.
