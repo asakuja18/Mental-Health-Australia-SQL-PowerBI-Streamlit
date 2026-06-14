@@ -4,7 +4,8 @@ Built an AI-powered Mental Health Analytics Platform using PostgreSQL, SQL, Powe
 
 ## Dashboard Preview
 
-<img width="850" height="476" alt="Screenshot 2026-06-14 at 4 00 10 PM" src="https://github.com/user-attachments/assets/a0a3bccc-bdd4-4775-bf81-f9dc95ad5215" />
+<img width="848" height="478" alt="Screenshot 2026-06-14 at 8 06 19 PM" src="https://github.com/user-attachments/assets/031aed05-0f6c-48dc-951f-9b720c5131da" />
+
 An interactive Power BI dashboard providing regional mental health analysis, severity distribution, prevalence benchmarking, and high-risk region identification across Australian SA2 regions.
 
 ## AI Assistant Preview
