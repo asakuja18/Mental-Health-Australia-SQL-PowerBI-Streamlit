@@ -13,12 +13,17 @@ An interactive Power BI dashboard providing regional mental health analysis, sev
 
 AI Assistant home screen with predefined and custom question options.
 
+
 ## AI Query Example
 
 
 <img width="1440" height="900" alt="Screenshot 2026-06-14 at 7 56 32 PM" src="https://github.com/user-attachments/assets/4d4d4849-49d3-4299-8442-d8b6df3a2520" />
+AI assistant retrieves regions with the lowest affected populations using conversational analytics powered by PostgreSQL and Streamlit.
+
+
 
 <img width="1440" height="900" alt="Screenshot 2026-06-14 at 7 57 54 PM" src="https://github.com/user-attachments/assets/7777b4b7-b49d-45bd-aed8-e6fbf1c7439e" />
+AI assistant identifies high-risk mental health regions through natural language queries and automated PostgreSQL analysis.
 
 
 
