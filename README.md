@@ -37,6 +37,7 @@ AI assistant identifies high-risk mental health regions through natural language
 - Python
 - Streamlit
 - Pandas
+- Ollama Ai
 
 ---
 
