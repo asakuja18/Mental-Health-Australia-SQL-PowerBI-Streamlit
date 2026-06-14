@@ -8,6 +8,17 @@ This project explores mental health prevalence across Australian SA2 regions usi
 
 ---
 
+## Tech Stack
+
+- PostgreSQL
+- SQL
+- Power BI
+- Python
+- Streamlit
+- Pandas
+
+---
+
 ## Business Problem
 
 Mental health prevalence data is often spread across multiple datasets and difficult for non-technical stakeholders to analyse. Decision-makers require a clear view of:
