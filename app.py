@@ -1,5 +1,9 @@
+import requests
 import streamlit as st
-import pandas as pd
+from database import run_query
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL = "llama3"
 
 st.set_page_config(
     page_title="Mental Health Australia AI Assistant",
@@ -7,276 +11,160 @@ st.set_page_config(
     layout="wide"
 )
 
-# -----------------------------
-# Load Data
-# -----------------------------
-@st.cache_data
-def load_data():
+st.title("🧠 Mental Health Australia AI Assistant")
+st.write("Ask any question about Australian SA2 mental health prevalence.")
 
-    overall = pd.read_csv("mental_health_overall_clean_v2.csv")
-    severity = pd.read_csv("mental_health_severity_clean_v2.csv")
+SCHEMA = """
+Table: mental_health_analysis
 
-    df = overall.merge(
-        severity,
-        on=["sa2_code", "sa2_name"],
-        how="inner"
+Columns:
+- sa2_code
+- sa2_name
+- persons_with_disorder
+- overall_pct
+- mild_pct
+- moderate_pct
+- severe_pct
+- population
+
+Business definitions:
+- affected population means persons_with_disorder
+- overall prevalence means overall_pct
+- severe prevalence means severe_pct
+- mild prevalence means mild_pct
+- moderate prevalence means moderate_pct
+- region means sa2_name
+"""
+
+def ask_ollama(prompt):
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": MODEL,
+            "prompt": prompt,
+            "stream": False
+        },
+        timeout=120
+    )
+    response.raise_for_status()
+    return response.json()["response"].strip()
+
+
+def generate_sql(user_question):
+    prompt = f"""
+You are a PostgreSQL SQL assistant.
+
+Use only this table and columns:
+
+{SCHEMA}
+
+Rules:
+- Generate only one SELECT query.
+- Do not use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE.
+- Always use the table mental_health_analysis.
+- Always limit results to 20 rows unless the user asks for averages, totals, or counts.
+- If the user asks for lowest or smallest values, sort ASC.
+- If the user asks for highest or largest values, sort DESC.
+- If the user says affected population, use persons_with_disorder.
+- Return SQL only. No explanation. No markdown.
+
+User question:
+{user_question}
+"""
+
+    sql = ask_ollama(prompt)
+
+    sql = (
+        sql.replace("```sql", "")
+        .replace("```", "")
+        .strip()
     )
 
-    return df
+    return sql
 
-df = load_data()
 
-# -----------------------------
-# Header
-# -----------------------------
-st.title("🧠 Mental Health Australia AI Assistant")
+def is_safe_sql(sql):
+    blocked_words = [
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "alter",
+        "create",
+        "truncate"
+    ]
 
-st.write(
-    "Select a question or ask your own about Australian SA2 mental health prevalence."
-)
+    sql_lower = sql.lower().strip()
 
-# -----------------------------
-# Suggested Questions
-# -----------------------------
-questions = [
-    "Select a question",
+    if not sql_lower.startswith("select"):
+        return False
+
+    for word in blocked_words:
+        if word in sql_lower:
+            return False
+
+    return True
+
+
+def generate_summary(user_question, df):
+    summary_prompt = f"""
+You are a healthcare data analyst.
+
+User question:
+{user_question}
+
+Query result:
+{df.head(10).to_string(index=False)}
+
+Write a short business-style explanation in 3-4 lines.
+Do not mention SQL.
+Do not mention database.
+Do not use technical language.
+Focus on the insight and what it means.
+"""
+
+    return ask_ollama(summary_prompt)
+
+
+examples = [
     "Which regions have the highest severe prevalence?",
-    "Which regions have the lowest severe prevalence?",
-    "Which regions have the highest overall prevalence?",
-    "What is the average mental health prevalence?",
+    "Which regions have the lowest overall prevalence?",
+    "Which regions have the lowest affected population?",
     "Which regions have the largest affected population?",
+    "What is the average mental health prevalence?",
+    "Show regions where severe prevalence is above 6%",
     "Which regions are high risk?"
 ]
 
-selected_question = st.selectbox(
-    "Choose a question:",
-    questions
-)
+st.caption("Example questions:")
+for example in examples:
+    st.write(f"• {example}")
 
-custom_question = st.text_input(
-    "Or ask your own question:"
-)
+question = st.text_input("Ask your question:")
 
-question = custom_question if custom_question else selected_question
+if question:
+    with st.spinner("Analysing your question..."):
+        try:
+            sql_query = generate_sql(question)
 
-# -----------------------------
-# Question Logic
-# -----------------------------
-if question and question != "Select a question":
+            if not is_safe_sql(sql_query):
+                st.error("The assistant generated an unsafe or invalid query. Please rephrase your question.")
+            else:
+                df = run_query(sql_query)
 
-    q = (
-        question.lower()
-        .replace("prevalance", "prevalence")
-        .replace("highest", "top")
-    )
+                st.subheader("AI Summary")
 
-    # ---------------------------------
-    # Highest Severe Prevalence
-    # ---------------------------------
-    if (
-        "top severe" in q
-        or "highest severe" in q
-        or "severe prevalence" in q
-    ):
+                if df.empty:
+                    st.warning("No matching results were found for this question.")
+                else:
+                    summary = generate_summary(question, df)
+                    st.write(summary)
 
-        result = (
-            df[
-                [
-                    "sa2_name",
-                    "severe_pct",
-                    "overall_pct",
-                    "population"
-                ]
-            ]
-            .sort_values(
-                by="severe_pct",
-                ascending=False
-            )
-            .head(10)
-        )
+                    st.subheader("Supporting Data")
+                    st.dataframe(df, use_container_width=True)
 
-        st.subheader("Top Regions by Severe Prevalence")
+                    st.success("Answer generated using local GenAI and PostgreSQL.")
 
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-        st.success(
-            "These regions show the highest severe mental health prevalence."
-        )
-
-    # ---------------------------------
-    # Lowest Severe Prevalence
-    # ---------------------------------
-    elif (
-        "lowest severe" in q
-        or "low severe" in q
-        or "least severe" in q
-    ):
-
-        result = (
-            df[
-                [
-                    "sa2_name",
-                    "severe_pct",
-                    "overall_pct",
-                    "population"
-                ]
-            ]
-            .sort_values(
-                by="severe_pct",
-                ascending=True
-            )
-            .head(10)
-        )
-
-        st.subheader("Regions with Lowest Severe Prevalence")
-
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-        st.success(
-            "These regions have the lowest severe mental health prevalence."
-        )
-
-    # ---------------------------------
-    # Highest Overall Prevalence
-    # ---------------------------------
-    elif (
-        "overall" in q
-        or "highest prevalence" in q
-        or "top prevalence" in q
-    ):
-
-        result = (
-            df[
-                [
-                    "sa2_name",
-                    "overall_pct",
-                    "severe_pct",
-                    "population"
-                ]
-            ]
-            .sort_values(
-                by="overall_pct",
-                ascending=False
-            )
-            .head(10)
-        )
-
-        st.subheader("Top Regions by Overall Prevalence")
-
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-        st.success(
-            "These regions show the highest overall mental health prevalence."
-        )
-
-    # ---------------------------------
-    # Average Prevalence
-    # ---------------------------------
-    elif "average" in q:
-
-        result = pd.DataFrame({
-            "Average Overall %":
-                [round(df["overall_pct"].mean(), 2)],
-            "Average Mild %":
-                [round(df["mild_pct"].mean(), 2)],
-            "Average Moderate %":
-                [round(df["moderate_pct"].mean(), 2)],
-            "Average Severe %":
-                [round(df["severe_pct"].mean(), 2)]
-        })
-
-        st.subheader("Average Mental Health Prevalence")
-
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-    # ---------------------------------
-    # Largest Affected Population
-    # ---------------------------------
-    elif (
-        "affected population" in q
-        or "largest affected" in q
-        or "persons with disorder" in q
-    ):
-
-        result = (
-            df[
-                [
-                    "sa2_name",
-                    "persons_with_disorder",
-                    "overall_pct",
-                    "population"
-                ]
-            ]
-            .sort_values(
-                by="persons_with_disorder",
-                ascending=False
-            )
-            .head(10)
-        )
-
-        st.subheader("Largest Affected Population")
-
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-        st.success(
-            "These regions contain the largest number of people with mental health conditions."
-        )
-
-    # ---------------------------------
-    # High Risk Regions
-    # ---------------------------------
-    elif "high risk" in q:
-
-        result = (
-            df[
-                (df["overall_pct"] >= 25)
-                & (df["severe_pct"] >= 6)
-            ][
-                [
-                    "sa2_name",
-                    "overall_pct",
-                    "severe_pct",
-                    "population"
-                ]
-            ]
-            .sort_values(
-                by="severe_pct",
-                ascending=False
-            )
-            .head(20)
-        )
-
-        st.subheader("High Risk Regions")
-
-        st.dataframe(
-            result,
-            use_container_width=True
-        )
-
-        st.success(
-            "These regions exceed the defined high-risk thresholds."
-        )
-
-    # ---------------------------------
-    # Fallback
-    # ---------------------------------
-    else:
-
-        st.warning(
-            "Please choose one of the suggested questions."
-        )
+        except Exception as e:
+            st.error("Something went wrong while generating the answer.")
+            st.write(e)
